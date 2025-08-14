@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        button { padding: 10px 20px; margin: 10px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        #results { margin-top: 20px; padding: 20px; background: #f8f9fa; border-radius: 5px; }
+        pre { background: white; padding: 15px; border-radius: 5px; overflow-x: auto; }
+        .error { color: red; }
+        .success { color: green; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Debug Test for Japan Search</h1>
+    <p>This page will help diagnose the data flow issue.</p>
+    
+    <button onclick="testAPI()">🔧 Test API Direct</button>
+    <button onclick="testFrontendSearch()">🌐 Test Frontend Search</button>
+    <button onclick="clearAllCaches()">🗑️ Clear All Caches</button>
+    <button onclick="testWithTimestamp()">⏰ Test with Cache Busting</button>
+    
+    <div id="results"></div>
+    
+    <script>
+        function log(message, type = 'info') {
+            console.log(message);
+            const results = document.getElementById('results');
+            const div = document.createElement('div');
+            div.className = type;
+            div.innerHTML = `<strong>[${new Date().toLocaleTimeString()}]</strong> ${message}`;
+            results.appendChild(div);
+        }
+        
+        async function testAPI() {
+            log('🔧 Testing API directly...');
+            try {
+                const timestamp = Date.now();
+                const response = await fetch(`/api/city-info?city=japan&_t=${timestamp}`);
+                const data = await response.json();
+                
+                log(`✅ API Response Status: ${response.status}`, 'success');
+                log(`📊 API Data:`, 'success');
+                
+                if (data.cityInfo) {
+                    log(`🏙️ Name: ${data.cityInfo.name}`, 'success');
+                    log(`💰 Currency: ${data.cityInfo.currency}`, 'success');
+                    log(`🗣️ Language: ${data.cityInfo.language}`, 'success');
+                    log(`🕐 Timezone: ${data.cityInfo.timezone}`, 'success');
+                    log(`📅 Best Time: ${data.cityInfo.bestTimeToVisit}`, 'success');
+                }
+                
+                document.getElementById('results').innerHTML += '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+            } catch (error) {
+                log(`❌ API Error: ${error.message}`, 'error');
+            }
+        }
+        
+        async function testFrontendSearch() {
+            log('🌐 Testing frontend search simulation...');
+            try {
+                // Clear any existing cache first
+                if ('caches' in window) {
+                    const cacheNames = await caches.keys();
+                    await Promise.all(cacheNames.map(name => caches.delete(name)));
+                    log('🗑️ Browser caches cleared', 'success');
+                }
+                
+                const timestamp = Date.now();
+                
+                // Simulate the exact frontend flow
+                log('📡 Fetching city info...');
+                const cityResponse = await fetch(`/api/city-info?city=japan&_t=${timestamp}`);
+                const cityData = await cityResponse.json();
+                log(`✅ City data received: ${cityData.cityInfo ? 'SUCCESS' : 'FAILED'}`, cityData.cityInfo ? 'success' : 'error');
+                
+                log('📡 Fetching places...');
+                const placesResponse = await fetch(`/api/places?city=japan&limit=12&_t=${timestamp}`);
+                const placesData = await placesResponse.json();
+                log(`✅ Places data received: ${placesData.places ? placesData.places.length + ' places' : 'FAILED'}`, placesData.places ? 'success' : 'error');
+                
+                const searchResult = {
+                    cityInfo: cityData.cityInfo,
+                    places: placesData.places || [],
+                    isLoading: false,
+                    error: null
+                };
+                
+                log('🎯 Final search result constructed', 'success');
+                log(`📊 Result summary: cityInfo=${!!searchResult.cityInfo}, places=${searchResult.places.length}`, 'success');
+                
+                if (searchResult.cityInfo) {
+                    log('🔍 Testing CityInfoCard data:', 'success');
+                    log(`   Name: ${searchResult.cityInfo.name}`);
+                    log(`   Currency: ${searchResult.cityInfo.currency}`);
+                    log(`   Language: ${searchResult.cityInfo.language}`);
+                    log(`   Timezone: ${searchResult.cityInfo.timezone}`);
+                }
+                
+                document.getElementById('results').innerHTML += '<h3>🎯 Final Search Result:</h3><pre>' + JSON.stringify(searchResult, null, 2) + '</pre>';
+                
+            } catch (error) {
+                log(`❌ Frontend Error: ${error.message}`, 'error');
+            }
+        }
+        
+        async function clearAllCaches() {
+            log('🗑️ Clearing all caches...');
+            try {
+                // Clear browser caches
+                if ('caches' in window) {
+                    const cacheNames = await caches.keys();
+                    await Promise.all(cacheNames.map(name => caches.delete(name)));
+                    log('✅ Browser caches cleared', 'success');
+                }
+                
+                // Clear localStorage
+                localStorage.clear();
+                log('✅ LocalStorage cleared', 'success');
+                
+                // Clear sessionStorage
+                sessionStorage.clear();
+                log('✅ SessionStorage cleared', 'success');
+                
+                // Call backend cache clear
+                const response = await fetch('/api/clear-cache', { method: 'POST' });
+                const data = await response.json();
+                log(`✅ Backend cache: ${data.message}`, 'success');
+                
+            } catch (error) {
+                log(`❌ Cache clear error: ${error.message}`, 'error');
+            }
+        }
+        
+        async function testWithTimestamp() {
+            log('⏰ Testing with cache busting timestamp...');
+            const timestamp = Date.now();
+            
+            try {
+                const response = await fetch(`/api/city-info?city=japan&_cacheBust=${timestamp}`);
+                const data = await response.json();
+                
+                log(`✅ Cache-busted API call successful`, 'success');
+                log(`📊 Data received: ${data.cityInfo ? 'YES' : 'NO'}`, data.cityInfo ? 'success' : 'error');
+                
+                if (data.cityInfo) {
+                    log(`🏙️ City: ${data.cityInfo.name}`, 'success');
+                    log(`💰 Currency: ${data.cityInfo.currency}`, 'success');
+                }
+                
+            } catch (error) {
+                log(`❌ Cache-bust test error: ${error.message}`, 'error');
+            }
+        }
+        
+        // Auto-run basic test on page load
+        window.onload = function() {
+            log('🚀 Debug page loaded. Ready for testing!');
+        };
+    </script>
+</body>
+</html>

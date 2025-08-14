@@ -3,15 +3,22 @@ import { ProcessedPlace } from './googlePlacesService';
 
 export interface CityInfo {
   name: string;
-  country: string;
+  country?: string;
   description: string;
   bestTimeToVisit: string;
   currency: string;
   language: string;
   timezone: string;
-  highlights: string[];
+  highlights?: string[];
   culturalTips: string[];
   transportation: string[];
+  population?: string;
+  averageTemperature?: string;
+  costLevel?: string;
+  safetyRating?: string;
+  climate?: string;
+  economy?: string;
+  keyFacts?: string[];
 }
 
 export interface EnhancedPlace extends ProcessedPlace {
@@ -168,7 +175,7 @@ class GeminiService {
 
       const result = await this.model.generateContent(prompt);
       const response = await result.response;
-      const recommendedOrder = response.text().trim().split(',').map(name => name.trim());
+      const recommendedOrder = response.text().trim().split(',').map((name: string) => name.trim());
 
       // Reorder places based on AI recommendations
       const reorderedPlaces: ProcessedPlace[] = [];
