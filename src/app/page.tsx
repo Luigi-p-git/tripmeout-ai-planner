@@ -1,14 +1,18 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Search, MapPin, Sparkles, Plane, Calendar, Users, GripVertical, Filter, BarChart3, Settings } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { PlaceCard } from '@/components/PlaceCard'
+import { CityInfoCard } from '@/components/CityInfoCard'
+import { searchService, SearchResult, SearchPreferences } from '@/services/searchService'
+import { EnhancedPlace } from '@/services/geminiService'
 
-// Mock data for cities and places
+// Mock data for cities and places (keeping original for fallback)
 const mockCities = {
   'Paris': [
     {
@@ -158,9 +162,40 @@ export default function Home() {
   const [draggedItem, setDraggedItem] = useState<any>(null)
   const [droppedItems, setDroppedItems] = useState<any[]>([])
   const [selectedCategory, setSelectedCategory] = useState('All')
+  
+  // Enhanced search functionality
+  const [searchResult, setSearchResult] = useState<SearchResult | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [searchPreferences] = useState<SearchPreferences>({
+    interests: ['culture', 'food', 'attractions'],
+    budget: 'medium',
+    duration: '3 days',
+    travelStyle: 'cultural'
+  })
 
-  const handleVibePlan = () => {
-    setPlanType('vibe')
+  const handleVibePlan = async () => {
+    if (!searchQuery.trim()) {
+      setPlanType('vibe')
+      return
+    }
+
+    setIsLoading(true)
+    setError(null)
+    
+    try {
+      // Use enhanced search if available, fallback to mock data
+      const result = await searchService.searchCity(searchQuery, searchPreferences)
+      setSearchResult(result)
+      setPlanType('vibe')
+    } catch (err) {
+      console.error('Search failed, using mock data:', err)
+      // Fallback to original behavior
+      setSearchResult(null)
+      setPlanType('vibe')
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const handleDragStart = (e: React.DragEvent, item: any) => {
@@ -186,18 +221,31 @@ export default function Home() {
   }
 
   const getPlacesForCity = () => {
-    const cityKey = Object.keys(mockCities).find(city => 
-      city.toLowerCase().includes(searchQuery.toLowerCase())
-    )
-    return cityKey ? mockCities[cityKey as keyof typeof mockCities] : []
-  }
+     // Use enhanced search result if available
+     if (searchResult?.places) {
+       return searchResult.places.map((place: EnhancedPlace) => ({
+         id: place.id,
+         name: place.name,
+         description: place.description || '',
+         image: place.image || 'https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=300&h=200&fit=crop',
+         category: place.category || 'Attraction',
+         duration: place.duration || '1-2 hours'
+       }))
+     }
+     
+     // Fallback to mock data
+     const cityKey = Object.keys(mockCities).find(city => 
+       city.toLowerCase().includes(searchQuery.toLowerCase())
+     )
+     return cityKey ? mockCities[cityKey as keyof typeof mockCities] : []
+   }
 
   const places = getPlacesForCity()
   const filteredPlaces = selectedCategory === 'All' 
     ? places 
-    : places.filter(place => place.category === selectedCategory)
+    : places.filter((place: any) => place.category === selectedCategory)
 
-  const categories = ['All', ...Array.from(new Set(places.map(place => place.category)))]
+  const categories = ['All', ...Array.from(new Set(places.map((place: any) => place.category)))]
 
   const isDashboardMode = planType && searchQuery
 
@@ -244,6 +292,7 @@ export default function Home() {
                         setPlanType(null)
                         setSearchQuery('')
                         setDroppedItems([])
+                        setSearchResult(null)
                       }}
                     >
                       New Trip
@@ -290,8 +339,16 @@ export default function Home() {
                         {filteredPlaces.length} places
                       </span>
                     </div>
+                    
+                    {/* Enhanced search results display */}
+                    {searchResult?.cityInfo && (
+                      <div className="mb-4">
+                        <CityInfoCard cityInfo={searchResult.cityInfo} />
+                      </div>
+                    )}
+                    
                     <div className="space-y-3 max-h-96 overflow-y-auto">
-                      {filteredPlaces.map((place) => (
+                      {filteredPlaces.map((place: any) => (
                         <motion.div
                           key={place.id}
                           initial={{ opacity: 0, y: 10 }}
@@ -311,15 +368,13 @@ export default function Home() {
                                 className="w-12 h-12 rounded-lg object-cover"
                               />
                               <div className="flex-1 min-w-0">
-                                <h4 className="font-medium text-gray-900 text-sm truncate">{place.name}</h4>
+                                <h4 className="font-semibold text-gray-900 text-sm mb-1 truncate">{place.name}</h4>
                                 <p className="text-xs text-gray-600 mb-2 line-clamp-2">{place.description}</p>
-                                <div className="flex items-center gap-2">
-                                  <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-full font-medium">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
                                     {place.category}
                                   </span>
-                                  <span className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded-full font-medium">
-                                    {place.duration}
-                                  </span>
+                                  <span className="text-xs text-gray-500">{place.duration}</span>
                                 </div>
                               </div>
                               <GripVertical className="w-4 h-4 text-gray-400 group-hover:text-gray-600" />
@@ -337,35 +392,19 @@ export default function Home() {
                   transition={{ duration: 0.5, delay: 0.2 }}
                   className="col-span-12 lg:col-span-8"
                 >
-                  <Card className="p-6 bg-white shadow-sm border border-gray-200 min-h-[600px]">
-                    <div className="flex items-center justify-between mb-6">
-                      <div className="flex items-center gap-3">
-                        <BarChart3 className="w-5 h-5 text-gray-600" />
-                        <h3 className="text-lg font-semibold text-gray-900">Your Itinerary</h3>
-                      </div>
-                      {droppedItems.length > 0 && (
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          onClick={() => setDroppedItems([])}
-                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                        >
-                          Clear All
-                        </Button>
-                      )}
+                  <Card className="p-6 bg-white shadow-sm border border-gray-200 h-full">
+                    <div className="flex items-center gap-3 mb-6">
+                      <BarChart3 className="w-5 h-5 text-gray-600" />
+                      <h3 className="text-lg font-semibold text-gray-900">Your Itinerary</h3>
                     </div>
-
+                    
                     <div
                       onDragOver={handleDragOver}
                       onDrop={handleDrop}
-                      className={`border-2 border-dashed rounded-xl p-8 transition-all duration-200 ${
-                        draggedItem 
-                          ? 'border-blue-400 bg-blue-50' 
-                          : 'border-gray-300 bg-gray-50'
-                      }`}
+                      className="min-h-96 border-2 border-dashed border-gray-300 rounded-xl p-6 bg-gray-50/50 hover:border-gray-400 hover:bg-gray-50 transition-all duration-200"
                     >
                       {droppedItems.length === 0 ? (
-                        <div className="text-center py-12">
+                        <div className="text-center py-16">
                           <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
                             <MapPin className="w-8 h-8 text-gray-400" />
                           </div>
@@ -397,44 +436,27 @@ export default function Home() {
                                 <div className="flex-1">
                                   <h4 className="font-semibold text-gray-900 mb-1">{item.name}</h4>
                                   <p className="text-sm text-gray-600 mb-2">{item.description}</p>
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-full font-medium">
+                                  <div className="flex items-center gap-4">
+                                    <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
                                       {item.category}
                                     </span>
-                                    <span className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded-full font-medium">
+                                    <span className="text-xs text-gray-500 flex items-center gap-1">
+                                      <Calendar className="w-3 h-3" />
                                       {item.duration}
                                     </span>
                                   </div>
                                 </div>
-                                <button
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
                                   onClick={() => removeDroppedItem(item.id)}
-                                  className="w-8 h-8 rounded-full bg-gray-100 hover:bg-red-100 text-gray-400 hover:text-red-500 transition-all duration-200 flex items-center justify-center"
+                                  className="text-gray-400 hover:text-red-500"
                                 >
                                   ×
-                                </button>
+                                </Button>
                               </div>
                             </motion.div>
                           ))}
-                        </div>
-                      )}
-
-                      {droppedItems.length > 0 && (
-                        <div className="mt-8 pt-6 border-t border-gray-200">
-                          <div className="flex gap-3">
-                            <Button 
-                              className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-xl py-3 font-semibold"
-                              disabled={droppedItems.length === 0}
-                            >
-                              Generate Complete Itinerary
-                            </Button>
-                            <Button 
-                              variant="outline" 
-                              className="px-6 py-3 rounded-xl border-gray-200 hover:bg-gray-50"
-                              disabled={droppedItems.length === 0}
-                            >
-                              Export PDF
-                            </Button>
-                          </div>
                         </div>
                       )}
                     </div>
@@ -450,135 +472,248 @@ export default function Home() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.6 }}
-            className="min-h-screen bg-white relative overflow-hidden"
+            className="min-h-screen flex flex-col items-center justify-center relative overflow-hidden px-4"
           >
-            <div className="container mx-auto px-6 py-12">
-               {/* Animated Map-like Background */}
-               <div className="absolute inset-0 opacity-30">
-                 {/* Grid Lines */}
+            <div className="absolute inset-0 bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50">
+               {/* Enhanced Airplane Trajectories with Sequential Dashed Trails */}
+               
+               {/* Airplane 1 - Purple - Curved trajectory */}
+               <motion.div
+                 className="absolute"
+                 initial={{ x: 50, y: 200 }}
+                 animate={{
+                   x: [50, 200, 350, 500, 650],
+                   y: [200, 150, 100, 120, 80],
+                   rotate: [0, 15, -10, 20, 0],
+                   opacity: [1, 1, 1, 0.5, 0]
+                 }}
+                 transition={{
+                   duration: 8,
+                   repeat: Infinity,
+                   ease: 'easeInOut',
+                   repeatDelay: 4
+                 }}
+               >
+                 <Plane className="w-4 h-4 text-purple-500 drop-shadow-lg" />
+               </motion.div>
+               
+               {/* Sequential dashed trail for Airplane 1 */}
+               {[...Array(12)].map((_, i) => (
                  <motion.div
-                   className="absolute inset-0"
+                   key={`purple-dash-${i}`}
+                   className="absolute w-3 h-0.5 bg-purple-400 rounded-full"
+                   initial={{
+                     x: 50 + (i * 50),
+                     y: 200 - (i * 10) + Math.sin(i * 0.5) * 15,
+                     opacity: 0
+                   }}
                    animate={{
-                     backgroundPosition: ['0px 0px', '40px 40px'],
+                     opacity: [0, 0.8, 0.4, 0]
                    }}
                    transition={{
-                     duration: 15,
+                     duration: 2,
+                     delay: i * 0.3,
                      repeat: Infinity,
-                     repeatType: 'reverse',
-                     ease: 'linear'
-                   }}
-                   style={{
-                     backgroundImage: `
-                       linear-gradient(rgba(139, 92, 246, 0.15) 1px, transparent 1px),
-                       linear-gradient(90deg, rgba(139, 92, 246, 0.15) 1px, transparent 1px)
-                     `,
-                     backgroundSize: '40px 40px'
+                     repeatDelay: 10
                    }}
                  />
-                 
-                 {/* Moving Flight Paths */}
-                 <motion.div
-                   className="absolute inset-0"
-                   animate={{
-                     backgroundPosition: ['0% 0%', '100% 100%'],
-                   }}
-                   transition={{
-                     duration: 25,
-                     repeat: Infinity,
-                     ease: 'linear'
-                   }}
-                   style={{
-                     backgroundImage: `
-                       radial-gradient(circle at 20% 30%, rgba(168, 85, 247, 0.4) 2px, transparent 2px),
-                       radial-gradient(circle at 80% 70%, rgba(236, 72, 153, 0.4) 2px, transparent 2px),
-                       radial-gradient(circle at 60% 20%, rgba(251, 146, 60, 0.4) 2px, transparent 2px)
-                     `,
-                     backgroundSize: '120px 120px, 150px 150px, 100px 100px'
-                   }}
-                 />
-                 
-                 {/* Floating Elements - Plane Markers */}
-                 <motion.div
-                   className="absolute top-1/4 left-1/4 w-3 h-3 bg-purple-500 rounded-full shadow-lg"
-                   animate={{
-                     x: [0, 150, 0],
-                     y: [0, -75, 0],
-                     opacity: [0.6, 1, 0.6],
-                     scale: [1, 1.2, 1]
-                   }}
-                   transition={{
-                     duration: 12,
-                     repeat: Infinity,
-                     ease: 'easeInOut'
-                   }}
-                 />
-                 <motion.div
-                   className="absolute top-3/4 right-1/3 w-2.5 h-2.5 bg-pink-500 rounded-full shadow-lg"
-                   animate={{
-                     x: [0, -120, 0],
-                     y: [0, 90, 0],
-                     opacity: [0.7, 1, 0.7],
-                     scale: [1, 1.3, 1]
-                   }}
-                   transition={{
-                     duration: 18,
-                     repeat: Infinity,
-                     ease: 'easeInOut',
-                     delay: 3
-                   }}
-                 />
-                 <motion.div
-                   className="absolute top-1/2 right-1/4 w-2 h-2 bg-orange-500 rounded-full shadow-lg"
-                   animate={{
-                     x: [0, -90, 0],
-                     y: [0, -120, 0],
-                     opacity: [0.5, 0.9, 0.5],
-                     scale: [1, 1.4, 1]
-                   }}
-                   transition={{
-                     duration: 14,
-                     repeat: Infinity,
-                     ease: 'easeInOut',
-                     delay: 6
-                   }}
-                 />
-                 
-                 {/* Additional Flight Path Indicators */}
-                 <motion.div
-                   className="absolute top-1/3 left-2/3 w-1.5 h-1.5 bg-blue-500 rounded-full shadow-md"
-                   animate={{
-                     x: [0, -200, 0],
-                     y: [0, 100, 0],
-                     opacity: [0.4, 0.8, 0.4]
-                   }}
-                   transition={{
-                     duration: 20,
-                     repeat: Infinity,
-                     ease: 'linear',
-                     delay: 2
-                   }}
-                 />
-                 <motion.div
-                   className="absolute bottom-1/4 left-1/3 w-2 h-2 bg-green-500 rounded-full shadow-md"
-                   animate={{
-                     x: [0, 180, 0],
-                     y: [0, -60, 0],
-                     opacity: [0.5, 0.9, 0.5]
-                   }}
-                   transition={{
-                     duration: 16,
-                     repeat: Infinity,
-                     ease: 'easeInOut',
-                     delay: 8
-                   }}
-                 />
-               </div>
+               ))}
 
+               {/* Airplane 2 - Pink - Diagonal descent */}
+               <motion.div
+                 className="absolute"
+                 initial={{ x: 600, y: 100 }}
+                 animate={{
+                   x: [600, 500, 400, 300, 200],
+                   y: [100, 180, 260, 340, 420],
+                   rotate: [0, -25, -45, -60, -90],
+                   opacity: [1, 1, 1, 0.6, 0]
+                 }}
+                 transition={{
+                   duration: 10,
+                   repeat: Infinity,
+                   ease: 'easeOut',
+                   repeatDelay: 2,
+                   delay: 2
+                 }}
+               >
+                 <Plane className="w-3.5 h-3.5 text-pink-500 drop-shadow-lg" />
+               </motion.div>
+               
+               {/* Sequential dashed trail for Airplane 2 */}
+               {[...Array(10)].map((_, i) => (
+                 <motion.div
+                   key={`pink-dash-${i}`}
+                   className="absolute w-2.5 h-0.5 bg-pink-400 rounded-full"
+                   initial={{
+                     x: 600 - (i * 40),
+                     y: 100 + (i * 32),
+                     opacity: 0,
+                     rotate: -45
+                   }}
+                   animate={{
+                     opacity: [0, 0.9, 0.5, 0]
+                   }}
+                   transition={{
+                     duration: 1.8,
+                     delay: 2 + (i * 0.4),
+                     repeat: Infinity,
+                     repeatDelay: 10
+                   }}
+                 />
+               ))}
+
+               {/* Airplane 3 - Orange - Loop trajectory */}
+               <motion.div
+                 className="absolute"
+                 initial={{ x: 300, y: 300 }}
+                 animate={{
+                   x: [300, 400, 450, 400, 300, 250, 300],
+                   y: [300, 250, 300, 350, 400, 350, 300],
+                   rotate: [0, 45, 90, 135, 180, 225, 360],
+                   opacity: [1, 1, 1, 1, 1, 0.3, 0]
+                 }}
+                 transition={{
+                   duration: 12,
+                   repeat: Infinity,
+                   ease: 'linear',
+                   repeatDelay: 3,
+                   delay: 4
+                 }}
+               >
+                 <Plane className="w-3 h-3 text-orange-500 drop-shadow-lg" />
+               </motion.div>
+               
+               {/* Sequential dashed trail for Airplane 3 - Circular */}
+               {[...Array(16)].map((_, i) => {
+                 const angle = (i * 22.5) * (Math.PI / 180);
+                 const radius = 75;
+                 return (
+                   <motion.div
+                     key={`orange-dash-${i}`}
+                     className="absolute w-2 h-0.5 bg-orange-400 rounded-full"
+                     initial={{
+                       x: 300 + Math.cos(angle) * radius,
+                       y: 300 + Math.sin(angle) * radius,
+                       opacity: 0,
+                       rotate: (i * 22.5) + 90
+                     }}
+                     animate={{
+                       opacity: [0, 0.7, 0.3, 0]
+                     }}
+                     transition={{
+                       duration: 1.5,
+                       delay: 4 + (i * 0.2),
+                       repeat: Infinity,
+                       repeatDelay: 12
+                     }}
+                   />
+                 );
+               })}
+
+               {/* Airplane 4 - Blue - Zigzag pattern */}
+               <motion.div
+                 className="absolute"
+                 initial={{ x: 100, y: 150 }}
+                 animate={{
+                   x: [100, 200, 150, 250, 200, 300, 250, 350],
+                   y: [150, 120, 180, 100, 200, 130, 190, 110],
+                   rotate: [0, 30, -30, 45, -45, 30, -30, 0],
+                   opacity: [1, 1, 1, 1, 1, 1, 0.4, 0]
+                 }}
+                 transition={{
+                   duration: 14,
+                   repeat: Infinity,
+                   ease: 'easeInOut',
+                   repeatDelay: 1,
+                   delay: 6
+                 }}
+               >
+                 <Plane className="w-3 h-3 text-blue-500 drop-shadow-lg" />
+               </motion.div>
+               
+               {/* Sequential dashed trail for Airplane 4 - Zigzag */}
+               {[...Array(14)].map((_, i) => {
+                 const zigzagX = 100 + (i * 18);
+                 const zigzagY = 150 + (i % 2 === 0 ? -20 : 20) + Math.sin(i * 0.8) * 15;
+                 return (
+                   <motion.div
+                     key={`blue-dash-${i}`}
+                     className="absolute w-2.5 h-0.5 bg-blue-400 rounded-full"
+                     initial={{
+                       x: zigzagX,
+                       y: zigzagY,
+                       opacity: 0
+                     }}
+                     animate={{
+                       opacity: [0, 0.8, 0.4, 0]
+                     }}
+                     transition={{
+                       duration: 1.6,
+                       delay: 6 + (i * 0.25),
+                       repeat: Infinity,
+                       repeatDelay: 11
+                     }}
+                   />
+                 );
+               })}
+
+               {/* Airplane 5 - Green - Ascending spiral */}
+               <motion.div
+                 className="absolute"
+                 initial={{ x: 500, y: 400 }}
+                 animate={{
+                   x: [500, 450, 400, 350, 300, 250, 200],
+                   y: [400, 350, 300, 250, 200, 150, 100],
+                   rotate: [0, 60, 120, 180, 240, 300, 360],
+                   scale: [1, 1.1, 1.2, 1.1, 1, 0.8, 0],
+                   opacity: [1, 1, 1, 1, 1, 0.5, 0]
+                 }}
+                 transition={{
+                   duration: 9,
+                   repeat: Infinity,
+                   ease: 'easeOut',
+                   repeatDelay: 6,
+                   delay: 8
+                 }}
+               >
+                 <Plane className="w-3.5 h-3.5 text-green-500 drop-shadow-lg" />
+               </motion.div>
+               
+               {/* Sequential dashed trail for Airplane 5 - Spiral */}
+               {[...Array(12)].map((_, i) => {
+                 const spiralX = 500 - (i * 25);
+                 const spiralY = 400 - (i * 25) + Math.cos(i * 0.8) * 10;
+                 return (
+                   <motion.div
+                     key={`green-dash-${i}`}
+                     className="absolute w-3 h-0.5 bg-green-400 rounded-full"
+                     initial={{
+                       x: spiralX,
+                       y: spiralY,
+                       opacity: 0,
+                       rotate: i * 30
+                     }}
+                     animate={{
+                       opacity: [0, 0.9, 0.5, 0]
+                     }}
+                     transition={{
+                       duration: 1.4,
+                       delay: 8 + (i * 0.2),
+                       repeat: Infinity,
+                       repeatDelay: 13
+                     }}
+                   />
+                 );
+               })}
+             </div>
+
+            <div className="w-full max-w-6xl mx-auto flex flex-col items-center relative z-10">
               <motion.div
                 initial={{ y: -20, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ duration: 0.6 }}
-                className="text-center mb-16 relative z-10"
+                className="text-center mb-16"
               >
                 <h1 className="text-6xl md:text-7xl font-black text-gray-900 mb-6 flex items-center justify-center gap-4 tracking-tight">
                   <motion.div
@@ -598,68 +733,52 @@ export default function Home() {
                 initial={{ y: 20, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ duration: 0.6, delay: 0.2 }}
-                className="max-w-4xl mx-auto mb-12 relative z-10"
+                className="w-full max-w-4xl mb-12"
               >
-                <div className="max-w-3xl mx-auto">
-                  <div className="relative mb-12">
-                    <Search className="absolute left-7 top-1/2 transform -translate-y-1/2 w-8 h-8 text-gray-500 z-10" />
+              <div className="max-w-4xl mx-auto">
+                <div className="flex flex-col items-center gap-6 mb-12">
+                  {/* Search Input */}
+                  <div className="relative w-full">
+                    <Search className="absolute left-6 top-1/2 transform -translate-y-1/2 w-6 h-6 text-gray-400 z-10" />
                     <Input
                       type="text"
                       placeholder="Where would you like to go?"
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full text-xl border-2 border-gray-300 bg-gray-50/80 backdrop-blur-sm focus:border-purple-400 focus:bg-white focus:ring-0 focus:outline-none placeholder:text-gray-500 text-gray-800 pl-20 pr-8 py-8 font-medium rounded-3xl shadow-lg hover:shadow-xl hover:bg-white transition-all duration-300"
+                      className="w-full text-xl border-2 border-white/20 bg-white/10 backdrop-blur-sm focus:border-white/40 focus:bg-white/20 focus:shadow-lg focus:ring-0 focus:outline-none placeholder:text-gray-300 text-white pl-16 pr-6 py-6 font-medium rounded-full shadow-lg hover:shadow-xl hover:bg-white/15 transition-all duration-300"
                     />
                   </div>
-
-                  <div className="flex items-center justify-center">
-                    <motion.div
-                      whileHover={{ scale: 1.08, y: -4 }}
-                      whileTap={{ scale: 0.95 }}
-                      transition={{ type: "spring", stiffness: 300, damping: 20 }}
-                    >
-                      <Button
-                        onClick={handleVibePlan}
-                        size="lg"
-                        className="relative overflow-hidden px-16 py-8 rounded-3xl font-black text-2xl shadow-2xl transition-all duration-700 group bg-gradient-to-r from-purple-600 via-pink-600 to-orange-500 text-white hover:shadow-purple-500/40 border-0"
-                      >
-                        <div className="absolute inset-0 bg-gradient-to-r from-purple-400 via-pink-400 to-orange-400 opacity-0 group-hover:opacity-30 transition-opacity duration-500"></div>
-                        <motion.div 
-                          className="flex items-center relative z-10"
-                          animate={{ x: [0, -3, 0] }}
-                          transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
-                        >
-                          <motion.div
-                            animate={{ 
-                              rotate: [0, 15, -15, 0],
-                              scale: [1, 1.2, 1]
-                            }}
-                            transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
-                          >
-                            <Sparkles className="w-8 h-8 mr-4" />
-                          </motion.div>
-                          <span className="tracking-wide">Discover by Vibe</span>
-                        </motion.div>
-                        <motion.div
-                          className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent"
-                          animate={{ x: [-200, 400] }}
-                          transition={{ duration: 2.5, repeat: Infinity, ease: "linear" }}
-                        />
-                        <motion.div
-                          className="absolute inset-0 rounded-3xl"
-                          animate={{
-                            boxShadow: [
-                              '0 0 20px rgba(168, 85, 247, 0.4)',
-                              '0 0 40px rgba(236, 72, 153, 0.6)',
-                              '0 0 20px rgba(168, 85, 247, 0.4)'
-                            ]
-                          }}
-                          transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-                        />
-                      </Button>
-                    </motion.div>
-                  </div>
-                </div>
+                  
+                  {/* Vibe Button */}
+                   <motion.div
+                     whileHover={{ scale: 1.05, y: -2 }}
+                     whileTap={{ scale: 0.95 }}
+                     transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                   >
+                     <Button
+                       onClick={handleVibePlan}
+                       disabled={isLoading}
+                       size="lg"
+                       className="relative overflow-hidden bg-gradient-to-r from-purple-600 via-pink-600 to-orange-500 hover:from-purple-700 hover:via-pink-700 hover:to-orange-600 text-white font-semibold px-8 py-4 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 border-0"
+                     >
+                       <div className="flex items-center gap-3">
+                         <Sparkles className="w-5 h-5" />
+                         <span className="text-lg">Discover by Vibe</span>
+                       </div>
+                       <motion.div
+                         className="absolute inset-0 bg-gradient-to-r from-white/20 to-transparent"
+                         animate={{ x: [-100, 100] }}
+                         transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
+                       />
+                       <motion.div
+                         className="absolute -inset-1 bg-gradient-to-r from-purple-600 via-pink-600 to-orange-500 rounded-full opacity-30 blur-lg"
+                         animate={{ scale: [1, 1.1, 1] }}
+                         transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                       />
+                     </Button>
+                   </motion.div>
+                 </div>
+               </div>
               </motion.div>
             </div>
           </motion.div>
