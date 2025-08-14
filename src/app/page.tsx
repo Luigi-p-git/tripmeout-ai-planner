@@ -1,356 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Search, MapPin, Sparkles, Plane, Calendar, Users, GripVertical, Filter, BarChart3, Settings, Globe, DollarSign, Clock, Thermometer, Users2, Building2, Train, Utensils } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card } from '@/components/ui/card'
-
-
-// Mock data for cities and places
-// Comprehensive city information
-const cityInfo = {
-  'Tokyo': {
-    population: '37.4M',
-    currency: 'Japanese Yen (¥)',
-    timezone: 'JST (UTC+9)',
-    temperature: '22°C',
-    language: 'Japanese',
-    area: '2,194 km²',
-    founded: '1457',
-    bestTime: 'Mar-May, Sep-Nov'
-  },
-  'Paris': {
-    population: '2.1M',
-    currency: 'Euro (€)',
-    timezone: 'CET (UTC+1)',
-    temperature: '15°C',
-    language: 'French',
-    area: '105 km²',
-    founded: '3rd century BC',
-    bestTime: 'Apr-Jun, Sep-Oct'
-  },
-  'New York': {
-    population: '8.3M',
-    currency: 'US Dollar ($)',
-    timezone: 'EST (UTC-5)',
-    temperature: '18°C',
-    language: 'English',
-    area: '783 km²',
-    founded: '1624',
-    bestTime: 'Apr-Jun, Sep-Nov'
-  },
-  'London': {
-    population: '9.0M',
-    currency: 'British Pound (£)',
-    timezone: 'GMT (UTC+0)',
-    temperature: '12°C',
-    language: 'English',
-    area: '1,572 km²',
-    founded: '43 AD',
-    bestTime: 'May-Sep'
-  }
-}
-
-const mockCities = {
-  'Paris': [
-    {
-      id: 1,
-      name: 'Eiffel Tower',
-      description: 'Iconic iron lattice tower and symbol of Paris',
-      image: 'https://images.unsplash.com/photo-1511739001486-6bfe10ce785f?w=300&h=200&fit=crop',
-      category: 'Attraction',
-      duration: '2-3 hours'
-    },
-    {
-      id: 2,
-      name: 'Louvre Museum',
-      description: 'World\'s largest art museum and historic monument',
-      image: 'https://images.unsplash.com/photo-1566139884669-4b9356b4c040?w=300&h=200&fit=crop',
-      category: 'Museum',
-      duration: '3-4 hours'
-    },
-    {
-      id: 3,
-      name: 'Notre-Dame Cathedral',
-      description: 'Medieval Catholic cathedral with Gothic architecture',
-      image: 'https://images.unsplash.com/photo-1539650116574-75c0c6d73f6e?w=300&h=200&fit=crop',
-      category: 'Historic Site',
-      duration: '1-2 hours'
-    },
-    {
-      id: 4,
-      name: 'Champs-Élysées',
-      description: 'Famous avenue for shopping and dining',
-      image: 'https://images.unsplash.com/photo-1502602898536-47ad22581b52?w=300&h=200&fit=crop',
-      category: 'Shopping',
-      duration: '2-3 hours'
-    }
-  ],
-  'Tokyo': [
-    {
-      id: 5,
-      name: 'Senso-ji Temple',
-      description: 'Ancient Buddhist temple in Asakusa district',
-      image: 'https://images.unsplash.com/photo-1545569341-9eb8b30979d9?w=300&h=200&fit=crop',
-      category: 'Temple',
-      duration: '1-2 hours'
-    },
-    {
-      id: 6,
-      name: 'Shibuya Crossing',
-      description: 'World\'s busiest pedestrian crossing',
-      image: 'https://images.unsplash.com/photo-1542051841857-5f90071e7989?w=300&h=200&fit=crop',
-      category: 'Landmark',
-      duration: '30 minutes'
-    },
-    {
-      id: 7,
-      name: 'Tokyo Skytree',
-      description: 'Broadcasting tower and observation deck',
-      image: 'https://images.unsplash.com/photo-1513407030348-c983a97b98d8?w=300&h=200&fit=crop',
-      category: 'Observation',
-      duration: '2-3 hours'
-    },
-    {
-      id: 8,
-      name: 'Tsukiji Fish Market',
-      description: 'Famous fish market and food destination',
-      image: 'https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=300&h=200&fit=crop',
-      category: 'Market',
-      duration: '2-3 hours'
-    },
-    {
-      id: 101,
-      name: 'Meiji Shrine',
-      description: 'Shinto shrine dedicated to Emperor Meiji',
-      image: 'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?w=300&h=200&fit=crop',
-      category: 'Shrine',
-      duration: '1-2 hours'
-    },
-    {
-      id: 102,
-      name: 'Tokyo National Museum',
-      description: 'Japan\'s oldest and largest museum',
-      image: 'https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=300&h=200&fit=crop',
-      category: 'Museum',
-      duration: '2-3 hours'
-    },
-    {
-      id: 103,
-      name: 'Ginza District',
-      description: 'Luxury shopping and dining district',
-      image: 'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?w=300&h=200&fit=crop',
-      category: 'Shopping',
-      duration: '2-4 hours'
-    },
-    {
-      id: 104,
-      name: 'Ueno Park',
-      description: 'Large public park famous for cherry blossoms',
-      image: 'https://images.unsplash.com/photo-1522383225653-ed111181a951?w=300&h=200&fit=crop',
-      category: 'Park',
-      duration: '2-3 hours'
-    },
-    {
-      id: 105,
-      name: 'Tokyo Imperial Palace',
-      description: 'Primary residence of the Emperor of Japan',
-      image: 'https://images.unsplash.com/photo-1480796927426-f609979314bd?w=300&h=200&fit=crop',
-      category: 'Palace',
-      duration: '1-2 hours'
-    },
-    {
-      id: 106,
-      name: 'Harajuku',
-      description: 'Youth culture and fashion district',
-      image: 'https://images.unsplash.com/photo-1513407030348-c983a97b98d8?w=300&h=200&fit=crop',
-      category: 'District',
-      duration: '2-3 hours'
-    },
-    {
-      id: 107,
-      name: 'Tokyo Tower',
-      description: 'Communications tower inspired by Eiffel Tower',
-      image: 'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?w=300&h=200&fit=crop',
-      category: 'Tower',
-      duration: '1-2 hours'
-    },
-    {
-      id: 108,
-      name: 'Akihabara',
-      description: 'Electronics and anime culture district',
-      image: 'https://images.unsplash.com/photo-1542051841857-5f90071e7989?w=300&h=200&fit=crop',
-      category: 'District',
-      duration: '2-4 hours'
-    },
-    {
-      id: 109,
-      name: 'Roppongi Hills',
-      description: 'Modern urban complex with shopping and dining',
-      image: 'https://images.unsplash.com/photo-1480796927426-f609979314bd?w=300&h=200&fit=crop',
-      category: 'Complex',
-      duration: '2-3 hours'
-    },
-    {
-      id: 110,
-      name: 'Shinjuku Gyoen',
-      description: 'Large park with traditional Japanese gardens',
-      image: 'https://images.unsplash.com/photo-1522383225653-ed111181a951?w=300&h=200&fit=crop',
-      category: 'Garden',
-      duration: '2-3 hours'
-    },
-    {
-      id: 111,
-      name: 'Odaiba',
-      description: 'Artificial island with entertainment complexes',
-      image: 'https://images.unsplash.com/photo-1513407030348-c983a97b98d8?w=300&h=200&fit=crop',
-      category: 'Island',
-      duration: '3-5 hours'
-    },
-    {
-      id: 112,
-      name: 'Kinkaku-ji Temple',
-      description: 'Golden Pavilion temple with stunning architecture',
-      image: 'https://images.unsplash.com/photo-1545569341-9eb8b30979d9?w=300&h=200&fit=crop',
-      category: 'Temple',
-      duration: '1-2 hours'
-    },
-    {
-      id: 113,
-      name: 'Tokyo DisneySea',
-      description: 'Unique Disney theme park with nautical theme',
-      image: 'https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=300&h=200&fit=crop',
-      category: 'Theme Park',
-      duration: '6-8 hours'
-    },
-    {
-      id: 114,
-      name: 'Nakamise Shopping Street',
-      description: 'Traditional shopping street leading to Senso-ji',
-      image: 'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?w=300&h=200&fit=crop',
-      category: 'Shopping',
-      duration: '1-2 hours'
-    },
-    {
-      id: 115,
-      name: 'Tokyo Station',
-      description: 'Historic railway station and shopping complex',
-      image: 'https://images.unsplash.com/photo-1480796927426-f609979314bd?w=300&h=200&fit=crop',
-      category: 'Station',
-      duration: '1-2 hours'
-    },
-    {
-      id: 116,
-      name: 'Yasukuni Shrine',
-      description: 'Shinto shrine commemorating war dead',
-      image: 'https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?w=300&h=200&fit=crop',
-      category: 'Shrine',
-      duration: '1 hour'
-    },
-    {
-      id: 117,
-      name: 'Teamlab Borderless',
-      description: 'Digital art museum with interactive exhibits',
-      image: 'https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=300&h=200&fit=crop',
-      category: 'Museum',
-      duration: '3-4 hours'
-    },
-    {
-      id: 118,
-      name: 'Kabukicho',
-      description: 'Entertainment and red-light district',
-      image: 'https://images.unsplash.com/photo-1542051841857-5f90071e7989?w=300&h=200&fit=crop',
-      category: 'District',
-      duration: '2-3 hours'
-    },
-    {
-      id: 119,
-      name: 'Tokyo Metropolitan Government Building',
-      description: 'Twin tower complex with free observation decks',
-      image: 'https://images.unsplash.com/photo-1513407030348-c983a97b98d8?w=300&h=200&fit=crop',
-      category: 'Building',
-      duration: '1-2 hours'
-    },
-    {
-      id: 120,
-      name: 'Sumida River',
-      description: 'River cruise with city skyline views',
-      image: 'https://images.unsplash.com/photo-1480796927426-f609979314bd?w=300&h=200&fit=crop',
-      category: 'River',
-      duration: '1-2 hours'
-    }
-  ],
-  'New York': [
-    {
-      id: 9,
-      name: 'Statue of Liberty',
-      description: 'Symbol of freedom and democracy',
-      image: 'https://images.unsplash.com/photo-1485738422979-f5c462d49f74?w=300&h=200&fit=crop',
-      category: 'Monument',
-      duration: '3-4 hours'
-    },
-    {
-      id: 10,
-      name: 'Central Park',
-      description: 'Large public park in Manhattan',
-      image: 'https://images.unsplash.com/photo-1564564321837-a57b7070ac4f?w=300&h=200&fit=crop',
-      category: 'Park',
-      duration: '2-4 hours'
-    },
-    {
-      id: 11,
-      name: 'Times Square',
-      description: 'Bright lights and Broadway theaters',
-      image: 'https://images.unsplash.com/photo-1496442226666-8d4d0e62e6e9?w=300&h=200&fit=crop',
-      category: 'Entertainment',
-      duration: '1-2 hours'
-    },
-    {
-      id: 12,
-      name: 'Brooklyn Bridge',
-      description: 'Historic suspension bridge with city views',
-      image: 'https://images.unsplash.com/photo-1490644658840-3f2e3f8c5625?w=300&h=200&fit=crop',
-      category: 'Bridge',
-      duration: '1-2 hours'
-    }
-  ],
-  'London': [
-    {
-      id: 13,
-      name: 'Big Ben',
-      description: 'Iconic clock tower and symbol of London',
-      image: 'https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?w=300&h=200&fit=crop',
-      category: 'Landmark',
-      duration: '30 minutes'
-    },
-    {
-      id: 14,
-      name: 'Tower of London',
-      description: 'Historic castle and home to the Crown Jewels',
-      image: 'https://images.unsplash.com/photo-1529655683826-3c8b7d6f8f3d?w=300&h=200&fit=crop',
-      category: 'Castle',
-      duration: '2-3 hours'
-    },
-    {
-      id: 15,
-      name: 'British Museum',
-      description: 'World-famous museum with ancient artifacts',
-      image: 'https://images.unsplash.com/photo-1555848962-6e79363ec551?w=300&h=200&fit=crop',
-      category: 'Museum',
-      duration: '3-4 hours'
-    },
-    {
-      id: 16,
-      name: 'London Eye',
-      description: 'Giant observation wheel on the Thames',
-      image: 'https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?w=300&h=200&fit=crop',
-      category: 'Observation',
-      duration: '1 hour'
-    }
-  ]
-}
+import { dataService, type CityInfo, type Place } from '@/services/dataService'
 
 type PlanType = 'vibe' | null
 
@@ -362,33 +18,90 @@ export default function Home() {
   const [draggedItem, setDraggedItem] = useState<any>(null)
   const [droppedItems, setDroppedItems] = useState<any[]>([])
   const [showSuggestions, setShowSuggestions] = useState(false)
-  const [filteredCities, setFilteredCities] = useState<string[]>([])
+  
+  // Real-time data state
+  const [currentCityInfo, setCurrentCityInfo] = useState<CityInfo | null>(null)
+  const [currentPlaces, setCurrentPlaces] = useState<Place[]>([])
+  const [isLoadingCityInfo, setIsLoadingCityInfo] = useState(false)
+  const [isLoadingPlaces, setIsLoadingPlaces] = useState(false)
+  const [searchSuggestions, setSearchSuggestions] = useState<string[]>([])
+  const [cityDataError, setCityDataError] = useState<string | null>(null)
 
   const handleVibePlan = () => {
     setPlanType('vibe')
   }
 
-  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value
-    setSearchQuery(value)
+  // Fetch real-time city data
+  const fetchCityData = async (cityName: string) => {
+    if (!cityName.trim()) return;
     
-    if (value.trim()) {
-      const cities = Object.keys(mockCities).filter(city => 
-        city.toLowerCase().includes(value.toLowerCase())
-      )
-      setFilteredCities(cities)
-      setShowSuggestions(cities.length > 0)
-    } else {
-      setShowSuggestions(false)
-      setFilteredCities([])
+    setIsLoadingCityInfo(true);
+    setIsLoadingPlaces(true);
+    setCityDataError(null);
+    
+    try {
+      // Fetch city info and places in parallel
+      const [cityInfo, places] = await Promise.all([
+        dataService.getCityInfo(cityName),
+        dataService.getPlaces(cityName, 20)
+      ]);
+      
+      // Handle city info availability
+      if (!cityInfo) {
+        setCityDataError(`We're currently unable to provide detailed information about ${cityName}. This may be due to temporary API issues or limited data coverage. Please try checking the city name spelling or try again later.`);
+      }
+      
+      setCurrentCityInfo(cityInfo);
+      setCurrentPlaces(places);
+    } catch (error) {
+      console.error('Error fetching city data:', error);
+      setCityDataError(`An error occurred while fetching data for ${cityName}. Please try again later.`);
+    } finally {
+      setIsLoadingCityInfo(false);
+      setIsLoadingPlaces(false);
     }
-  }
+  };
 
-  const handleCitySelect = (city: string) => {
-    setSearchQuery(city)
-    setShowSuggestions(false)
-    setFilteredCities([])
-  }
+  const handleSearchChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setSearchQuery(value);
+    
+    if (value.length > 1) {
+      try {
+        const suggestions = await dataService.searchCities(value);
+        setSearchSuggestions(suggestions);
+        setShowSuggestions(true);
+      } catch (error) {
+        console.error('Error fetching city suggestions:', error);
+        setSearchSuggestions([]);
+      }
+    } else {
+      setSearchSuggestions([]);
+      setShowSuggestions(false);
+    }
+  };
+
+  const handleCitySelect = async (city: string) => {
+    setSearchQuery(city);
+    setShowSuggestions(false);
+    setSearchSuggestions([]);
+    await fetchCityData(city);
+  };
+
+  // Fetch data when search query changes (on Enter or search button)
+  const handleSearch = async () => {
+    if (searchQuery.trim()) {
+      await fetchCityData(searchQuery);
+    }
+  };
+
+  // Handle Enter key press
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleSearch();
+      setShowSuggestions(false);
+    }
+  };
 
   const handleDragStart = (e: React.DragEvent, item: any) => {
     setDraggedItem(item)
@@ -412,14 +125,7 @@ export default function Home() {
     setDroppedItems(prev => prev.filter(item => item.id !== itemId))
   }
 
-  const getPlacesForCity = () => {
-    const cityKey = Object.keys(mockCities).find(city => 
-      city.toLowerCase().includes(searchQuery.toLowerCase())
-    )
-    return cityKey ? mockCities[cityKey as keyof typeof mockCities] : []
-  }
-
-  const places = getPlacesForCity()
+  // Places are now fetched via API and stored in currentPlaces
 
   const isDashboardMode = planType && searchQuery
 
@@ -458,62 +164,86 @@ export default function Home() {
                       <p className="text-xl text-white/90 mb-4">Discover amazing places and create your perfect itinerary</p>
                       
                       {/* City Information Grid */}
-                      {cityInfo[searchQuery as keyof typeof cityInfo] && (
+                      {isLoadingCityInfo ? (
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                          {[...Array(8)].map((_, i) => (
+                            <div key={i} className="flex items-center gap-2 text-white/90 bg-white/10 backdrop-blur-sm rounded-lg px-3 py-2 animate-pulse">
+                              <div className="w-4 h-4 bg-white/20 rounded"></div>
+                              <div>
+                                <div className="w-12 h-3 bg-white/20 rounded mb-1"></div>
+                                <div className="w-16 h-4 bg-white/20 rounded"></div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : cityDataError ? (
+                        <div className="bg-red-500/20 backdrop-blur-sm rounded-lg px-4 py-3 mb-4 border border-red-400/30">
+                          <div className="flex items-center gap-2 text-white">
+                            <div className="w-5 h-5 rounded-full bg-red-500 flex items-center justify-center">
+                              <span className="text-white text-xs font-bold">!</span>
+                            </div>
+                            <div>
+                              <div className="font-semibold text-sm">City Information Unavailable</div>
+                              <div className="text-xs text-white/90 mt-1">{cityDataError}</div>
+                            </div>
+                          </div>
+                        </div>
+                      ) : currentCityInfo && (
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
                           <div className="flex items-center gap-2 text-white/90 bg-white/10 backdrop-blur-sm rounded-lg px-3 py-2">
                             <Users2 className="w-4 h-4 text-blue-300" />
                             <div>
                               <div className="text-xs text-white/70">Population</div>
-                              <div className="font-semibold">{cityInfo[searchQuery as keyof typeof cityInfo].population}</div>
+                              <div className="font-semibold">{currentCityInfo.population}</div>
                             </div>
                           </div>
                           <div className="flex items-center gap-2 text-white/90 bg-white/10 backdrop-blur-sm rounded-lg px-3 py-2">
                             <DollarSign className="w-4 h-4 text-green-300" />
                             <div>
                               <div className="text-xs text-white/70">Currency</div>
-                              <div className="font-semibold">{cityInfo[searchQuery as keyof typeof cityInfo].currency}</div>
+                              <div className="font-semibold">{currentCityInfo.currency}</div>
                             </div>
                           </div>
                           <div className="flex items-center gap-2 text-white/90 bg-white/10 backdrop-blur-sm rounded-lg px-3 py-2">
                             <Clock className="w-4 h-4 text-purple-300" />
                             <div>
                               <div className="text-xs text-white/70">Timezone</div>
-                              <div className="font-semibold">{cityInfo[searchQuery as keyof typeof cityInfo].timezone}</div>
+                              <div className="font-semibold">{currentCityInfo.timezone}</div>
                             </div>
                           </div>
                           <div className="flex items-center gap-2 text-white/90 bg-white/10 backdrop-blur-sm rounded-lg px-3 py-2">
                             <Thermometer className="w-4 h-4 text-orange-300" />
                             <div>
                               <div className="text-xs text-white/70">Temperature</div>
-                              <div className="font-semibold">{cityInfo[searchQuery as keyof typeof cityInfo].temperature}</div>
+                              <div className="font-semibold">{currentCityInfo.averageTemperature}</div>
                             </div>
                           </div>
                           <div className="flex items-center gap-2 text-white/90 bg-white/10 backdrop-blur-sm rounded-lg px-3 py-2">
                             <Globe className="w-4 h-4 text-cyan-300" />
                             <div>
                               <div className="text-xs text-white/70">Language</div>
-                              <div className="font-semibold">{cityInfo[searchQuery as keyof typeof cityInfo].language}</div>
+                              <div className="font-semibold">{currentCityInfo.language}</div>
                             </div>
                           </div>
                           <div className="flex items-center gap-2 text-white/90 bg-white/10 backdrop-blur-sm rounded-lg px-3 py-2">
                             <Building2 className="w-4 h-4 text-yellow-300" />
                             <div>
-                              <div className="text-xs text-white/70">Area</div>
-                              <div className="font-semibold">{cityInfo[searchQuery as keyof typeof cityInfo].area}</div>
+                              <div className="text-xs text-white/70">Safety</div>
+                              <div className="font-semibold">{currentCityInfo.safetyRating}</div>
                             </div>
                           </div>
                           <div className="flex items-center gap-2 text-white/90 bg-white/10 backdrop-blur-sm rounded-lg px-3 py-2">
                             <Calendar className="w-4 h-4 text-pink-300" />
                             <div>
-                              <div className="text-xs text-white/70">Founded</div>
-                              <div className="font-semibold">{cityInfo[searchQuery as keyof typeof cityInfo].founded}</div>
+                              <div className="text-xs text-white/70">Cost Level</div>
+                              <div className="font-semibold">{currentCityInfo.costLevel}</div>
                             </div>
                           </div>
                           <div className="flex items-center gap-2 text-white/90 bg-white/10 backdrop-blur-sm rounded-lg px-3 py-2">
                             <Sparkles className="w-4 h-4 text-indigo-300" />
                             <div>
                               <div className="text-xs text-white/70">Best Time</div>
-                              <div className="font-semibold">{cityInfo[searchQuery as keyof typeof cityInfo].bestTime}</div>
+                              <div className="font-semibold">{currentCityInfo.bestTimeToVisit}</div>
                             </div>
                           </div>
                         </div>
@@ -522,7 +252,7 @@ export default function Home() {
                       <div className="flex items-center gap-4 mt-3 text-white/80">
                         <span className="flex items-center gap-1">
                           <MapPin className="w-4 h-4" />
-                          {places.length} places to explore
+                          {currentPlaces.length} places to explore
                         </span>
                         <span className="flex items-center gap-1">
                           <Sparkles className="w-4 h-4" />
@@ -562,11 +292,28 @@ export default function Home() {
                     <div className="flex items-center justify-between mb-6">
                       <h3 className="text-2xl font-bold text-gray-900">Places to Visit</h3>
                       <span className="text-sm text-purple-600 bg-purple-50 px-3 py-1 rounded-full font-medium">
-                        {places.length} places
+                        {currentPlaces.length} places
                       </span>
                     </div>
                     <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2">
-                      {places.map((place) => (
+                      {isLoadingPlaces ? (
+                        [...Array(6)].map((_, i) => (
+                          <div key={i} className="p-4 border border-gray-100 rounded-xl bg-gradient-to-r from-gray-50 to-white animate-pulse">
+                            <div className="flex items-start gap-4">
+                              <div className="w-16 h-16 bg-gray-200 rounded-xl"></div>
+                              <div className="flex-1 min-w-0">
+                                <div className="w-32 h-5 bg-gray-200 rounded mb-2"></div>
+                                <div className="w-full h-4 bg-gray-200 rounded mb-3"></div>
+                                <div className="flex items-center gap-2">
+                                  <div className="w-16 h-6 bg-gray-200 rounded-full"></div>
+                                  <div className="w-20 h-6 bg-gray-200 rounded-full"></div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        currentPlaces.map((place) => (
                         <motion.div
                           key={place.id}
                           initial={{ opacity: 0, y: 10 }}
@@ -606,7 +353,8 @@ export default function Home() {
                             </div>
                           </div>
                         </motion.div>
-                      ))}
+                        ))
+                      )}
                     </div>
                   </Card>
                 </motion.div>
@@ -915,7 +663,7 @@ export default function Home() {
                       value={searchQuery}
                       onChange={handleSearchChange}
                       onFocus={() => {
-                        if (searchQuery.trim() && filteredCities.length > 0) {
+                        if (searchQuery.trim() && searchSuggestions.length > 0) {
                           setShowSuggestions(true)
                         }
                       }}
@@ -927,7 +675,7 @@ export default function Home() {
                     />
                     
                     {/* Search Suggestions Dropdown */}
-                    {showSuggestions && filteredCities.length > 0 && (
+                    {showSuggestions && searchSuggestions.length > 0 && (
                       <motion.div
                         initial={{ opacity: 0, y: -10 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -935,7 +683,7 @@ export default function Home() {
                         transition={{ duration: 0.2 }}
                         className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-2xl shadow-xl z-50 overflow-hidden backdrop-blur-sm"
                       >
-                        {filteredCities.map((city, index) => (
+                        {searchSuggestions.map((city, index) => (
                           <motion.div
                             key={city}
                             initial={{ opacity: 0, x: -10 }}
@@ -948,7 +696,7 @@ export default function Home() {
                             <div>
                               <span className="text-lg font-medium text-gray-900">{city}</span>
                               <p className="text-sm text-gray-500">
-                                {mockCities[city as keyof typeof mockCities].length} places to explore
+                                Explore amazing places
                               </p>
                             </div>
                           </motion.div>

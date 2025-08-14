@@ -3,8 +3,8 @@ import { geminiService } from '@/services/geminiService';
 
 const GEMINI_API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY;
 
-// City data mapping with real information
-const cityDatabase: Record<string, any> = {
+// Fallback city data for when Gemini is unavailable
+const fallbackCityData: Record<string, any> = {
   'tokyo': {
     name: 'Tokyo',
     country: 'Japan',
@@ -177,6 +177,76 @@ const cityDatabase: Record<string, any> = {
       'Major cruise ship destination',
       'Leading smart city in Europe'
     ]
+  },
+  'rome': {
+    name: 'Rome',
+    country: 'Italy',
+    population: '2.8 million (city), 4.3 million (metropolitan area)',
+    currency: 'Euro (€)',
+    language: 'Italian',
+    timezone: 'CET (UTC+1)',
+    bestTimeToVisit: 'April-June, September-October',
+    description: 'The Eternal City, Rome is a living museum with over 2,500 years of history. Home to the Vatican, Colosseum, and countless ancient ruins.',
+    climate: 'Mediterranean climate with hot summers and mild winters',
+    economy: 'Major tourist destination, government center, and cultural hub',
+    averageTemperature: '15°C (59°F)',
+    costLevel: 'Medium-High',
+    safetyRating: '8/10',
+    culturalTips: [
+      'Dress modestly when visiting churches',
+      'Lunch is typically 1-3pm, dinner after 8pm',
+      'Learn basic Italian phrases - locals appreciate it',
+      'Tipping is not mandatory but appreciated',
+      'Be respectful at historical sites'
+    ],
+    transportation: [
+      'Metro (3 lines: A, B, C)',
+      'Extensive bus network',
+      'Taxis and ride-sharing',
+      'Walking (historic center is compact)',
+      'Bike sharing available'
+    ],
+    keyFacts: [
+      'Capital of Italy and former Roman Empire',
+      'Home to Vatican City (smallest country in the world)',
+      'Contains more UNESCO World Heritage Sites than any other city',
+      'Known as "Caput Mundi" (Capital of the World)'
+    ]
+  },
+  'sydney': {
+    name: 'Sydney',
+    country: 'Australia',
+    population: '5.3 million (metropolitan area)',
+    currency: 'Australian Dollar (AUD)',
+    language: 'English',
+    timezone: 'AEST/AEDT (UTC+10/+11)',
+    bestTimeToVisit: 'September-November and March-May',
+    description: 'Sydney is Australia\'s largest city, famous for its stunning harbor, iconic Opera House, and beautiful beaches. A vibrant multicultural metropolis with world-class dining and outdoor lifestyle.',
+    climate: 'Temperate oceanic climate with warm summers and mild winters',
+    economy: 'Major financial center, tourism hub, and gateway to Asia-Pacific',
+    averageTemperature: '18°C (64°F)',
+    costLevel: 'High',
+    safetyRating: '9/10',
+    culturalTips: [
+      'Australians are generally casual and friendly',
+      'Tipping is not mandatory but appreciated for good service',
+      'Sun protection is essential - UV levels are high',
+      'Beach safety: swim between the flags',
+      'Public transport etiquette: offer seats to elderly and pregnant'
+    ],
+    transportation: [
+      'Sydney Trains (extensive rail network)',
+      'Buses and light rail',
+      'Sydney Ferries (harbor transport)',
+      'Taxis and ride-sharing',
+      'Walking and cycling paths'
+    ],
+    keyFacts: [
+      'Home to the iconic Sydney Opera House and Harbour Bridge',
+      'Host city of 2000 Summer Olympics',
+      'One of the world\'s most liveable cities',
+      'Gateway to Australia with the busiest airport in the country'
+    ]
   }
 };
 
@@ -191,38 +261,45 @@ export async function GET(request: NextRequest) {
   // Normalize city name for lookup
   const normalizedCity = cityName.toLowerCase().trim();
   
-  // First, try to get real-time data from Gemini AI
+  // PRODUCTION: Prioritize real-time data from Gemini AI
   if (geminiService.isAvailable()) {
     try {
+      console.log(`Fetching real-time data for ${cityName} from Gemini AI...`);
       const geminiCityInfo = await geminiService.getCityInfo(cityName);
       if (geminiCityInfo) {
-        // Enhance with additional fields if available from our database
-        const databaseInfo = cityDatabase[normalizedCity];
+        console.log(`Successfully retrieved real-time data for ${cityName}`);
+        // For production, return pure Gemini data with minimal fallback enhancement
         const enhancedInfo = {
           ...geminiCityInfo,
-          // Add database-specific fields if available
-          ...(databaseInfo && {
-            population: databaseInfo.population,
-            climate: databaseInfo.climate,
-            economy: databaseInfo.economy,
-            averageTemperature: databaseInfo.averageTemperature,
-            costLevel: databaseInfo.costLevel,
-            safetyRating: databaseInfo.safetyRating,
-            keyFacts: databaseInfo.keyFacts
-          })
+          // Only add essential fields that might be missing
+          population: geminiCityInfo.population || 'Data not available',
+          averageTemperature: geminiCityInfo.averageTemperature || 'Varies by season',
+          costLevel: geminiCityInfo.costLevel || 'Medium',
+          safetyRating: geminiCityInfo.safetyRating || 'Check current travel advisories'
         };
         return NextResponse.json({ cityInfo: enhancedInfo });
+      } else {
+        console.warn(`Gemini returned null data for ${cityName}`);
       }
     } catch (error) {
-      console.error('Error fetching from Gemini:', error);
+      console.error(`Error fetching from Gemini for ${cityName}:`, error);
       // Continue to fallback options
     }
+  } else {
+    console.warn('Gemini service not available - check API key configuration');
   }
   
-  // Fallback to our curated database
-  const cityData = cityDatabase[normalizedCity];
+  // EMERGENCY FALLBACK: Only use curated database if Gemini completely fails
+  console.warn(`Using emergency fallback data for ${cityName} - Gemini AI unavailable`);
+  const cityData = fallbackCityData[normalizedCity];
   if (cityData) {
-    return NextResponse.json({ cityInfo: cityData });
+    console.log(`Found fallback data for ${cityName}`);
+    return NextResponse.json({ 
+      cityInfo: {
+        ...cityData,
+        description: `${cityData.description} [Note: Using cached data - real-time information unavailable]`
+      }
+    });
   }
 
   // Check if user searched for a country instead of a city
@@ -251,7 +328,7 @@ export async function GET(request: NextRequest) {
       try {
         const geminiCityInfo = await geminiService.getCityInfo(suggestedCity);
         if (geminiCityInfo) {
-          const databaseInfo = cityDatabase[suggestedCity.toLowerCase()];
+          const databaseInfo = fallbackCityData[suggestedCity.toLowerCase()];
           const enhancedInfo = {
             ...geminiCityInfo,
             name: `${suggestedCity} (${cityName})`,
@@ -274,7 +351,7 @@ export async function GET(request: NextRequest) {
     }
     
     // Fallback to database for suggested city
-    const suggestedCityData = cityDatabase[suggestedCity.toLowerCase()];
+    const suggestedCityData = fallbackCityData[suggestedCity.toLowerCase()];
     if (suggestedCityData) {
       const modifiedData = {
         ...suggestedCityData,
@@ -285,41 +362,29 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  // Enhanced fallback for cities not in our database
-  const fallbackInfo = {
-    name: cityName,
-    country: 'Unknown',
-    population: 'Data not available',
-    currency: 'Local currency',
-    language: 'Local language',
-    timezone: 'Local timezone',
-    bestTimeToVisit: 'Year-round (varies by climate)',
-    description: `${cityName} is a unique destination with its own character and attractions. Each city offers distinct experiences, culture, and history worth exploring.`,
-    climate: 'Climate varies by location',
-    economy: 'Local economy information not available',
-    averageTemperature: 'Varies by season',
-    costLevel: 'Medium',
-    safetyRating: 'Check current travel advisories',
-    culturalTips: [
-      'Research local customs before visiting',
-      'Learn basic phrases in the local language',
-      'Respect cultural and religious sites',
-      'Be mindful of local etiquette and dress codes',
-      'Ask locals for recommendations'
-    ],
-    transportation: [
-      'Public transportation (varies by city)',
-      'Taxi and ride-sharing services',
-      'Walking and cycling',
-      'Car rental (if needed)',
-      'Local transportation apps'
-    ],
-    keyFacts: [
-      'Every city has unique attractions and culture',
-      'Local experiences vary greatly',
-      'Research specific information before traveling'
-    ]
-  };
+  // PRODUCTION FALLBACK: Provide helpful response for any city worldwide
+  console.warn(`No specific data available for ${cityName} - providing generic travel information`);
+  
+  // Return an error for production to indicate we need better data coverage
+  return NextResponse.json({ 
+    error: 'City information temporarily unavailable',
+    message: `We're currently unable to provide detailed information about ${cityName}. This may be due to:
+- Temporary API service issues
+- City name spelling or formatting
+- Limited data coverage for this location
 
-  return NextResponse.json({ cityInfo: fallbackInfo });
+Please try:
+- Checking the city name spelling
+- Using the full city name (e.g., "New York City" instead of "NYC")
+- Trying again in a few moments
+
+For immediate assistance, please search for major cities or contact support.`,
+    suggestions: [
+      'Verify city name spelling',
+      'Try using the full city name',
+      'Search for nearby major cities',
+      'Contact support if the issue persists'
+    ],
+    cityName: cityName
+  }, { status: 503 }); // Service Unavailable
 }
