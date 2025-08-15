@@ -2,13 +2,77 @@
 
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Search, MapPin, Sparkles, Plane, Calendar, Users, GripVertical, Filter, BarChart3, Settings, Globe, DollarSign, Clock, Thermometer, Users2, Building2, Train, Utensils } from 'lucide-react'
+import { Search, MapPin, Sparkles, Plane, Calendar, Users, GripVertical, Filter, BarChart3, Settings, Globe, DollarSign, Clock, Thermometer, Users2, Building2, Train, Utensils, ChevronDown, ChevronUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card } from '@/components/ui/card'
 import { dataService, type CityInfo, type Place } from '@/services/dataService'
+import GoogleMap from '@/components/GoogleMap'
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core'
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, horizontalListSortingStrategy } from '@dnd-kit/sortable'
+import { useSortable } from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 
 type PlanType = 'vibe' | null
+
+// Sortable Timeline Item Component
+function SortableTimelineItem({ item, index, totalItems }: { item: any, index: number, totalItems: number }) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: item.id.toString() })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  }
+
+  return (
+    <motion.div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, delay: index * 0.1 }}
+      className={`flex-shrink-0 w-64 bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-4 border border-purple-100 hover:shadow-md transition-all cursor-grab active:cursor-grabbing ${
+        isDragging ? 'shadow-2xl scale-105 z-50' : ''
+      }`}
+    >
+      <div className="flex items-center gap-2 mb-3">
+        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold text-white shadow-md ${
+          index === 0 ? 'bg-green-500' : 
+          index === totalItems - 1 ? 'bg-red-500' : 'bg-purple-500'
+        }`}>
+          {item.order}
+        </div>
+        <div className="flex flex-col">
+          <span className="text-xs text-gray-500">Day {item.day}</span>
+          <span className="text-xs font-medium text-purple-600">{item.timeSlot}</span>
+        </div>
+        <div className="ml-auto">
+          <GripVertical className="w-4 h-4 text-gray-400" />
+        </div>
+      </div>
+      <img 
+        src={item.image} 
+        alt={item.name}
+        className="w-full h-24 object-cover rounded-lg mb-3"
+      />
+      <h3 className="font-semibold text-sm text-gray-900 mb-2 line-clamp-2">{item.name}</h3>
+      <p className="text-xs text-gray-600 mb-3 line-clamp-2">{item.description}</p>
+      <div className="flex items-center justify-between">
+        <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full">{item.category}</span>
+        <span className="text-xs text-gray-500">{item.duration}</span>
+      </div>
+    </motion.div>
+  )
+}
 
 export default function Home() {
   const [searchQuery, setSearchQuery] = useState('')
@@ -26,9 +90,25 @@ export default function Home() {
   const [isLoadingPlaces, setIsLoadingPlaces] = useState(false)
   const [searchSuggestions, setSearchSuggestions] = useState<string[]>([])
   const [cityDataError, setCityDataError] = useState<string | null>(null)
+  const [showItinerary, setShowItinerary] = useState(false)
+  const [generatedItinerary, setGeneratedItinerary] = useState<any[]>([])
+  const [isGeneratingItinerary, setIsGeneratingItinerary] = useState(false)
+  const [collapsedItems, setCollapsedItems] = useState<Set<number>>(new Set())
 
   const handleVibePlan = () => {
     setPlanType('vibe')
+  }
+
+  const toggleItemCollapse = (itemId: number) => {
+    setCollapsedItems(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(itemId)) {
+        newSet.delete(itemId)
+      } else {
+        newSet.add(itemId)
+      }
+      return newSet
+    })
   }
 
   // Fetch real-time city data
@@ -104,6 +184,7 @@ export default function Home() {
   };
 
   const handleDragStart = (e: React.DragEvent, item: any) => {
+    console.log('Drag started for item:', item)
     setDraggedItem(item)
     e.dataTransfer.effectAllowed = 'move'
   }
@@ -111,18 +192,109 @@ export default function Home() {
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault()
     e.dataTransfer.dropEffect = 'move'
+    console.log('Drag over drop zone')
   }
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault()
+    console.log('Drop event triggered')
+    console.log('Current draggedItem:', draggedItem)
+    console.log('Current droppedItems:', droppedItems)
+    
     if (draggedItem && !droppedItems.find(item => item.id === draggedItem.id)) {
-      setDroppedItems(prev => [...prev, draggedItem])
+      console.log('Adding item to droppedItems:', draggedItem)
+      setDroppedItems(prev => {
+        const newItems = [...prev, draggedItem]
+        console.log('New droppedItems array:', newItems)
+        return newItems
+      })
+    } else {
+      console.log('Item not added - either no draggedItem or duplicate')
     }
     setDraggedItem(null)
   }
 
   const removeDroppedItem = (itemId: number) => {
     setDroppedItems(prev => prev.filter(item => item.id !== itemId))
+  }
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  )
+
+  const handleTimelineDragEnd = (event: any) => {
+    const { active, over } = event
+
+    if (active.id !== over?.id) {
+      setGeneratedItinerary((items) => {
+        const oldIndex = items.findIndex((item) => item.id.toString() === active.id)
+        const newIndex = items.findIndex((item) => item.id.toString() === over.id)
+        
+        const newItems = arrayMove(items, oldIndex, newIndex)
+        // Update order numbers
+        return newItems.map((item, index) => ({
+          ...item,
+          order: index + 1
+        }))
+      })
+    }
+  }
+
+  const handleGenerateItinerary = () => {
+    console.log('Generate itinerary clicked!')
+    console.log('Dropped items:', droppedItems)
+    
+    if (droppedItems.length === 0) {
+      console.log('No dropped items, returning early')
+      return
+    }
+    
+    console.log('Setting isGeneratingItinerary to true')
+    setIsGeneratingItinerary(true)
+    
+    // Use setTimeout instead of async/await for Safari compatibility
+    setTimeout(() => {
+      try {
+        console.log('Starting itinerary generation...')
+        
+        // Create optimized itinerary with time slots
+        const optimizedItinerary = droppedItems.map((item, index) => ({
+          ...item,
+          day: Math.floor(index / 3) + 1,
+          timeSlot: ['9:00 AM', '1:00 PM', '5:00 PM'][index % 3],
+          duration: item.duration || '2-3 hours',
+          order: index + 1,
+          coordinates: {
+            lat: -33.8688 + (Math.random() - 0.5) * 0.1, // Sydney area with random offset
+            lng: 151.2093 + (Math.random() - 0.5) * 0.1
+          }
+        }))
+        
+        console.log('Generated itinerary:', optimizedItinerary)
+        setGeneratedItinerary(optimizedItinerary)
+        console.log('Setting showItinerary to true')
+        setShowItinerary(true)
+        
+        // Smooth scroll to itinerary section
+         setTimeout(() => {
+           try {
+             window.scrollTo({ top: window.innerHeight, behavior: 'smooth' })
+           } catch (e) {
+             // Fallback for older Safari versions
+             window.scrollTo(0, window.innerHeight)
+           }
+         }, 100)
+        
+      } catch (error) {
+        console.error('Error generating itinerary:', error)
+      } finally {
+        console.log('Setting isGeneratingItinerary to false')
+        setIsGeneratingItinerary(false)
+      }
+    }, 2000) // 2 second delay to simulate generation
   }
 
   // Places are now fetched via API and stored in currentPlaces
@@ -132,7 +304,405 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-white">
       <AnimatePresence mode="wait">
-        {isDashboardMode ? (
+        {showItinerary ? (
+          <motion.div
+            key="itinerary"
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -50 }}
+            transition={{ duration: 0.8 }}
+            className="min-h-screen bg-gradient-to-br from-gray-50 to-white"
+          >
+            {/* Itinerary Header */}
+            <motion.div
+              initial={{ y: -20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              transition={{ duration: 0.6 }}
+              className="bg-gradient-to-r from-purple-600 via-pink-600 to-orange-500 text-white py-8"
+            >
+              <div className="container mx-auto px-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h1 className="text-4xl font-bold mb-2">Your {searchQuery} Itinerary</h1>
+                    <p className="text-purple-100 text-lg">Optimized route with {generatedItinerary.length} amazing stops</p>
+                  </div>
+                  <Button
+                    onClick={() => setShowItinerary(false)}
+                    variant="outline"
+                    className="bg-white/10 border-white/20 text-white hover:bg-white/20"
+                  >
+                    Back to Planning
+                  </Button>
+                </div>
+              </div>
+            </motion.div>
+
+            {/* Horizontal Drag-and-Drop Timeline Section */}
+            <div className="container mx-auto px-6 py-6">
+              <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 mb-6">
+                <h2 className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent mb-4">
+                  Interactive Timeline - Drag to Reorder
+                </h2>
+                <DndContext 
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleTimelineDragEnd}
+                >
+                  <SortableContext 
+                    items={generatedItinerary.map(item => item.id.toString())}
+                    strategy={horizontalListSortingStrategy}
+                  >
+                    <div className="flex overflow-x-auto pb-4 space-x-4 min-h-[200px]">
+                      {generatedItinerary.map((item, index) => (
+                        <SortableTimelineItem 
+                          key={item.id} 
+                          item={item} 
+                          index={index} 
+                          totalItems={generatedItinerary.length}
+                        />
+                      ))}
+                    </div>
+                  </SortableContext>
+                </DndContext>
+              </div>
+            </div>
+
+            {/* Main Content */}
+            <div className="container mx-auto px-6 pb-8">
+              <div className="grid lg:grid-cols-2 gap-6">
+                {/* Compact Itinerary Timeline */}
+                <div className="space-y-4">
+                  <div className="text-center mb-6">
+                    <h2 className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent mb-2">
+                      Your World-Class Journey
+                    </h2>
+                    <p className="text-gray-600 text-sm">Expertly curated experiences with insider tips and optimal timing</p>
+                  </div>
+                  
+                  <div className="relative">
+                    {/* Connecting Line */}
+                    <div className="absolute left-8 top-0 bottom-0 w-1 bg-gradient-to-b from-purple-400 via-pink-400 to-orange-400 rounded-full opacity-30"></div>
+                    
+                    {generatedItinerary.map((item, index) => {
+                      const isFirst = index === 0
+                      const isLast = index === generatedItinerary.length - 1
+                      const nextItem = generatedItinerary[index + 1]
+                      
+                      return (
+                        <motion.div
+                          key={item.id}
+                          initial={{ opacity: 0, x: -30 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ duration: 0.6, delay: index * 0.15 }}
+                          className="relative mb-8 last:mb-0"
+                        >
+                          {/* Timeline Node */}
+                          <div className={`absolute left-6 w-4 h-4 rounded-full border-4 border-white shadow-lg z-10 ${
+                            isFirst ? 'bg-green-500' : isLast ? 'bg-red-500' : 'bg-purple-500'
+                          }`}></div>
+                          
+                          {/* Compact Card */}
+                          <div className="ml-16 bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden hover:shadow-xl transition-all duration-300">
+                            {/* Compact Header */}
+                            <div className={`p-4 bg-gradient-to-r ${
+                              isFirst ? 'from-green-500 to-emerald-600' : 
+                              isLast ? 'from-red-500 to-rose-600' : 
+                              'from-purple-500 to-pink-600'
+                            } text-white`}>
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center font-bold text-sm">
+                                    {item.order}
+                                  </div>
+                                  <div>
+                                    <h3 className="text-lg font-bold">{item.name}</h3>
+                                    <p className="text-white/80 text-xs">{item.category}</p>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <div className="text-right">
+                                    <div className="bg-white/20 px-2 py-1 rounded-full text-xs font-medium">
+                                      Day {item.day}
+                                    </div>
+                                    <div className="text-white/80 text-xs mt-1">{item.timeSlot}</div>
+                                  </div>
+                                  <button
+                                    onClick={() => toggleItemCollapse(index)}
+                                    className="p-1 hover:bg-white/20 rounded-lg transition-colors"
+                                  >
+                                    {collapsedItems.has(index) ? 
+                                      <ChevronDown className="w-4 h-4" /> : 
+                                      <ChevronUp className="w-4 h-4" />
+                                    }
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                            
+                            {/* Collapsible Card Content */}
+                            <AnimatePresence>
+                              {!collapsedItems.has(index) && (
+                                <motion.div
+                                  initial={{ height: 0, opacity: 0 }}
+                                  animate={{ height: 'auto', opacity: 1 }}
+                                  exit={{ height: 0, opacity: 0 }}
+                                  transition={{ duration: 0.3 }}
+                                  className="overflow-hidden"
+                                >
+                                  <div className="p-4">
+                                    <p className="text-gray-700 text-sm leading-relaxed mb-4">{item.description}</p>
+                              
+                                     {/* Compact Details */}
+                                     <div className="grid grid-cols-2 gap-3 mb-4">
+                                       <div className="bg-blue-50 rounded-lg p-3">
+                                         <div className="flex items-center gap-2 mb-1">
+                                           <Clock className="w-4 h-4 text-blue-600" />
+                                           <span className="font-medium text-blue-900 text-xs">Duration</span>
+                                         </div>
+                                         <p className="text-blue-700 text-sm">{item.duration}</p>
+                                       </div>
+                                       
+                                       <div className="bg-green-50 rounded-lg p-3">
+                                         <div className="flex items-center gap-2 mb-1">
+                                           <DollarSign className="w-4 h-4 text-green-600" />
+                                           <span className="font-medium text-green-900 text-xs">Budget</span>
+                                         </div>
+                                         <p className="text-green-700 text-sm">
+                                           {item.category === 'Restaurant' ? '$25-45' :
+                                            item.category === 'Museum' ? '$15-25' :
+                                            item.category === 'Park' ? 'Free' :
+                                            item.category === 'Shopping' ? '$50-200+' :
+                                            '$20-40'}
+                                         </p>
+                                       </div>
+                                     </div>
+                              
+                                     {/* Compact Travel Tips */}
+                                     <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-lg p-3 mb-4">
+                                       <div className="flex items-center gap-2 mb-2">
+                                         <Sparkles className="w-4 h-4 text-amber-600" />
+                                         <span className="font-medium text-amber-900 text-xs">Tips</span>
+                                       </div>
+                                <ul className="space-y-1 text-amber-800 text-xs">
+                                  {item.category === 'Restaurant' && (
+                                    <>
+                                         <li className="flex items-start gap-2">
+                                           <span className="w-1 h-1 bg-amber-600 rounded-full mt-1.5 flex-shrink-0"></span>
+                                           <span>Make reservations 2-3 days in advance</span>
+                                         </li>
+                                          <li className="flex items-start gap-2">
+                                            <span className="w-1 h-1 bg-amber-600 rounded-full mt-1.5 flex-shrink-0"></span>
+                                            <span>Try chef's special</span>
+                                          </li>
+                                          <li className="flex items-start gap-2">
+                                            <span className="w-1 h-1 bg-amber-600 rounded-full mt-1.5 flex-shrink-0"></span>
+                                            <span>Peak: 7-9 PM, arrive early</span>
+                                          </li>
+                                    </>
+                                  )}
+                                  {item.category === 'Museum' && (
+                                    <>
+                                      <li className="flex items-start gap-2">
+                                        <span className="w-1.5 h-1.5 bg-amber-600 rounded-full mt-2 flex-shrink-0"></span>
+                                        <span>Visit during weekday mornings for fewer crowds</span>
+                                      </li>
+                                      <li className="flex items-start gap-2">
+                                        <span className="w-1.5 h-1.5 bg-amber-600 rounded-full mt-2 flex-shrink-0"></span>
+                                        <span>Download the audio guide app for enhanced experience</span>
+                                      </li>
+                                      <li className="flex items-start gap-2">
+                                        <span className="w-1.5 h-1.5 bg-amber-600 rounded-full mt-2 flex-shrink-0"></span>
+                                        <span>Check for special exhibitions and temporary displays</span>
+                                      </li>
+                                    </>
+                                  )}
+                                  {item.category === 'Park' && (
+                                    <>
+                                      <li className="flex items-start gap-2">
+                                        <span className="w-1.5 h-1.5 bg-amber-600 rounded-full mt-2 flex-shrink-0"></span>
+                                        <span>Best lighting for photos: Golden hour (1 hour before sunset)</span>
+                                      </li>
+                                      <li className="flex items-start gap-2">
+                                        <span className="w-1.5 h-1.5 bg-amber-600 rounded-full mt-2 flex-shrink-0"></span>
+                                        <span>Bring comfortable walking shoes and water bottle</span>
+                                      </li>
+                                      <li className="flex items-start gap-2">
+                                        <span className="w-1.5 h-1.5 bg-amber-600 rounded-full mt-2 flex-shrink-0"></span>
+                                        <span>Look for hidden viewpoints and local wildlife</span>
+                                      </li>
+                                    </>
+                                  )}
+                                  {(item.category === 'Shopping' || item.category === 'Market') && (
+                                    <>
+                                      <li className="flex items-start gap-2">
+                                        <span className="w-1.5 h-1.5 bg-amber-600 rounded-full mt-2 flex-shrink-0"></span>
+                                        <span>Negotiate prices at local markets, start at 50% of asking price</span>
+                                      </li>
+                                      <li className="flex items-start gap-2">
+                                        <span className="w-1.5 h-1.5 bg-amber-600 rounded-full mt-2 flex-shrink-0"></span>
+                                        <span>Bring cash for better deals and faster transactions</span>
+                                      </li>
+                                      <li className="flex items-start gap-2">
+                                        <span className="w-1.5 h-1.5 bg-amber-600 rounded-full mt-2 flex-shrink-0"></span>
+                                        <span>Visit early morning for freshest products and best selection</span>
+                                      </li>
+                                    </>
+                                  )}
+                                  {!['Restaurant', 'Museum', 'Park', 'Shopping', 'Market'].includes(item.category) && (
+                                    <>
+                                      <li className="flex items-start gap-2">
+                                        <span className="w-1.5 h-1.5 bg-amber-600 rounded-full mt-2 flex-shrink-0"></span>
+                                        <span>Arrive early to avoid crowds and get the best experience</span>
+                                      </li>
+                                      <li className="flex items-start gap-2">
+                                        <span className="w-1.5 h-1.5 bg-amber-600 rounded-full mt-2 flex-shrink-0"></span>
+                                        <span>Check opening hours and any special requirements in advance</span>
+                                      </li>
+                                      <li className="flex items-start gap-2">
+                                        <span className="w-1.5 h-1.5 bg-amber-600 rounded-full mt-2 flex-shrink-0"></span>
+                                        <span>Bring a camera and comfortable clothing for the activity</span>
+                                      </li>
+                                    </>
+                                  )}
+                                </ul>
+                              </div>
+                              
+                                     {/* Compact Transportation */}
+                                     {!isLast && nextItem && (
+                                       <div className="bg-gray-50 rounded-lg p-3">
+                                         <div className="flex items-center justify-between">
+                                           <div className="flex items-center gap-2">
+                                             <Train className="w-4 h-4 text-gray-600" />
+                                             <span className="font-medium text-gray-900 text-xs">To {nextItem.name}</span>
+                                           </div>
+                                           <div className="flex items-center gap-2 text-xs text-gray-600">
+                                             <span className="flex items-center gap-1">
+                                               <Clock className="w-3 h-3" />
+                                               {Math.floor(Math.random() * 20) + 5}min
+                                             </span>
+                                             <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded-full text-xs">
+                                               {['Walk', 'Taxi', 'Metro', 'Bus'][Math.floor(Math.random() * 4)]}
+                                             </span>
+                                           </div>
+                                         </div>
+                                       </div>
+                                     )}
+                                  </div>
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
+                          </div>
+                        </motion.div>
+                      )
+                    })}
+                   </div>
+                </div>
+
+                {/* Compact Google Map */}
+                <div className="lg:sticky lg:top-8">
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.8, delay: 0.3 }}
+                    className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden"
+                  >
+                    {/* Compact Map Header */}
+                    <div className="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white p-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="text-lg font-bold mb-1">Route Map</h3>
+                          <p className="text-white/80 text-sm">{generatedItinerary.length} destinations</p>
+                        </div>
+                        <div className="bg-white/20 rounded-lg p-2">
+                          <MapPin className="w-5 h-5" />
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Compact Map Stats */}
+                    <div className="p-3 bg-gradient-to-r from-gray-50 to-blue-50 border-b">
+                      <div className="grid grid-cols-3 gap-3 text-center">
+                        <div>
+                          <div className="text-lg font-bold text-blue-600">{generatedItinerary.length}</div>
+                          <div className="text-xs text-gray-600">Stops</div>
+                        </div>
+                        <div>
+                          <div className="text-lg font-bold text-purple-600">
+                            {Math.floor(Math.random() * 15) + 10}km
+                          </div>
+                          <div className="text-xs text-gray-600">Distance</div>
+                        </div>
+                        <div>
+                          <div className="text-lg font-bold text-pink-600">
+                            {Math.floor(Math.random() * 3) + 2}h
+                          </div>
+                          <div className="text-xs text-gray-600">Time</div>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Compact Map Container */}
+                    <div className="relative">
+                      <div className="h-[400px] bg-gray-100">
+                        <GoogleMap places={generatedItinerary} />
+                      </div>
+                      
+                      {/* Map Legend */}
+                      <div className="absolute bottom-4 left-4 bg-white/95 backdrop-blur-sm rounded-xl p-4 shadow-lg border border-gray-200">
+                        <h4 className="font-semibold text-gray-900 mb-3 text-sm">Map Legend</h4>
+                        <div className="space-y-2 text-xs">
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                            <span className="text-gray-700">Start Point</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
+                            <span className="text-gray-700">Destinations</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="w-3 h-3 bg-red-500 rounded-full"></div>
+                            <span className="text-gray-700">End Point</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-0.5 bg-purple-500 rounded"></div>
+                            <span className="text-gray-700">Optimized Route</span>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Map Controls */}
+                      <div className="absolute top-4 right-4 bg-white/95 backdrop-blur-sm rounded-xl p-2 shadow-lg border border-gray-200">
+                        <div className="space-y-2">
+                          <button className="w-8 h-8 bg-blue-500 text-white rounded-lg flex items-center justify-center hover:bg-blue-600 transition-colors">
+                            <span className="text-lg font-bold">+</span>
+                          </button>
+                          <button className="w-8 h-8 bg-blue-500 text-white rounded-lg flex items-center justify-center hover:bg-blue-600 transition-colors">
+                            <span className="text-lg font-bold">−</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Quick Actions */}
+                    <div className="p-4 bg-gray-50 border-t">
+                      <div className="flex gap-2">
+                        <button className="flex-1 bg-blue-500 text-white py-2 px-4 rounded-xl font-medium hover:bg-blue-600 transition-colors text-sm">
+                          Send to Phone
+                        </button>
+                        <button className="flex-1 bg-green-500 text-white py-2 px-4 rounded-xl font-medium hover:bg-green-600 transition-colors text-sm">
+                          Open in Maps
+                        </button>
+                        <button className="flex-1 bg-purple-500 text-white py-2 px-4 rounded-xl font-medium hover:bg-purple-600 transition-colors text-sm">
+                          Export PDF
+                        </button>
+                      </div>
+                    </div>
+                  </motion.div>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        ) : isDashboardMode ? (
           <motion.div
             key="dashboard"
             initial={{ opacity: 0 }}
@@ -386,8 +956,14 @@ export default function Home() {
                     </div>
                     
                     <div 
-                      onDragOver={handleDragOver}
-                      onDrop={handleDrop}
+                      onDragOver={(e) => {
+                        handleDragOver(e)
+                        console.log('Drop zone drag over')
+                      }}
+                      onDrop={(e) => {
+                        console.log('Drop zone drop event')
+                        handleDrop(e)
+                      }}
                       className="min-h-[500px] border-2 border-dashed border-purple-200 rounded-2xl p-6 bg-gradient-to-br from-purple-50/50 to-pink-50/50 hover:border-purple-300 hover:bg-gradient-to-br hover:from-purple-50 hover:to-pink-50 transition-all duration-300"
                     >
                       {droppedItems.length === 0 ? (
@@ -447,7 +1023,7 @@ export default function Home() {
                                   onClick={() => removeDroppedItem(item.id)}
                                   className="w-10 h-10 rounded-xl bg-red-50 hover:bg-red-100 text-red-400 hover:text-red-600 transition-all duration-200 flex items-center justify-center font-bold text-lg"
                                 >
-                                  ×
+                                  X
                                 </motion.button>
                               </div>
                             </motion.div>
@@ -469,11 +1045,17 @@ export default function Home() {
                               className="flex-1"
                             >
                               <Button 
+                                onClick={(e) => {
+                                  e.preventDefault()
+                                  e.stopPropagation()
+                                  handleGenerateItinerary()
+                                }}
+                                type="button"
                                 className="w-full bg-gradient-to-r from-purple-600 via-pink-600 to-orange-500 hover:from-purple-700 hover:via-pink-700 hover:to-orange-600 text-white rounded-2xl py-4 font-bold text-lg shadow-lg hover:shadow-xl transition-all duration-300"
-                                disabled={droppedItems.length === 0}
+                                disabled={droppedItems.length === 0 || isGeneratingItinerary}
                               >
                                 <Sparkles className="w-5 h-5 mr-2" />
-                                Generate Complete Itinerary
+                                {isGeneratingItinerary ? 'Generating...' : 'Generate Complete Itinerary'}
                               </Button>
                             </motion.div>
                             <motion.div
